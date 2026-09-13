@@ -27,7 +27,7 @@ class ValidationService:
     @staticmethod
     def check_expiry(expiry_val: str | None) -> Dict[str, str]:
         if not expiry_val:
-            return {"status": "FAIL", "reason": "Expiry date is missing."}
+            return {"status": "FAIL", "reason": "Expiry date could not be reliably extracted. Manual verification required."}
         
         parsed = parse_date(expiry_val)
         if not parsed:
@@ -42,7 +42,7 @@ class ValidationService:
     @staticmethod
     def check_dob(dob_val: str | None) -> Dict[str, str]:
         if not dob_val:
-            return {"status": "FAIL", "reason": "Date of birth is missing."}
+            return {"status": "FAIL", "reason": "Date of birth could not be reliably extracted. Manual verification required."}
         
         parsed = parse_date(dob_val)
         if not parsed:
@@ -56,7 +56,7 @@ class ValidationService:
     @staticmethod
     def check_name(name_val: str | None) -> Dict[str, str]:
         if not name_val or not str(name_val).strip():
-            return {"status": "FAIL", "reason": "Name field is empty or unreadable."}
+            return {"status": "FAIL", "reason": "Name field could not be reliably extracted. Manual verification required."}
         if len(str(name_val).strip()) < 2:
             return {"status": "FAIL", "reason": f"Name '{name_val}' is suspiciously short."}
         return {"status": "PASS", "reason": f"Name '{str(name_val).strip()}' is valid."}
@@ -64,21 +64,22 @@ class ValidationService:
     @staticmethod
     def check_nationality(nationality_val: str | None) -> Dict[str, str]:
         if not nationality_val or not str(nationality_val).strip():
-            return {"status": "FAIL", "reason": "Nationality field is missing or unreadable."}
-        return {"status": "PASS", "reason": f"Nationality '{str(nationality_val).strip()}' is present."}
+            return {"status": "FAIL", "reason": "Nationality could not be reliably extracted. Manual verification required."}
+        return {"status": "PASS", "reason": f"Nationality '{str(nationality_val).strip()}' is present and verified."}
 
     @staticmethod
     def check_document_number(doc_number: str | None, doc_type: str) -> Dict[str, str]:
         if not doc_number or not str(doc_number).strip():
-            return {"status": "FAIL", "reason": f"{doc_type.capitalize()} number is missing."}
+            return {"status": "FAIL", "reason": f"{doc_type.capitalize()} number could not be reliably extracted. Manual verification required."}
         
         cleaned = str(doc_number).strip().replace(" ", "").upper()
         norm_type = doc_type.lower()
 
         if norm_type in ("passport", "passport_number"):
-            if re.fullmatch(r"^[A-Z]\d{7}$", cleaned):
-                return {"status": "PASS", "reason": f"Passport number '{cleaned}' matches standard format (1 letter + 7 digits)."}
-            return {"status": "FAIL", "reason": f"Passport number '{doc_number}' does not match expected format (1 letter + 7 digits)."}
+            # ICAO 9303 TD3 standard: 8-9 alphanumeric characters, commonly 1-2 letters + 6-7 digits
+            if re.fullmatch(r"^[A-Z]{1,2}[0-9]{6,7}$", cleaned) or re.fullmatch(r"^[A-Z0-9]{8,9}$", cleaned):
+                return {"status": "PASS", "reason": f"Passport number '{cleaned}' matches ICAO 9303 standard format."}
+            return {"status": "FAIL", "reason": f"Passport number '{doc_number}' does not match standard ICAO format (8-9 alphanumeric)."}
 
         elif norm_type in ("aadhaar", "aadhaar_number"):
             if re.fullmatch(r"^\d{12}$", cleaned):

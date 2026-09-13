@@ -1,10 +1,13 @@
+import os
 from app.embedder import generate_embedding
 from app.verifier import verify_faces
 
+BASE_DIR = os.path.dirname(__file__)
+
 
 def test_same_person():
-    image1 = "test_images/face_image.png"
-    image2 = "test_images/face_image.png"
+    image1 = os.path.join(BASE_DIR, "test_images/face_image.png")
+    image2 = os.path.join(BASE_DIR, "test_images/face_image.png")
 
     embedding1 = generate_embedding(image1)
     embedding2 = generate_embedding(image2)
@@ -22,8 +25,8 @@ def test_same_person():
 
 
 def test_different_person():
-    image1 = "test_images/face_image.png"
-    image2 = "test_images/different_face.png"
+    image1 = os.path.join(BASE_DIR, "test_images/face_image.png")
+    image2 = os.path.join(BASE_DIR, "test_images/different_face.png")
 
     embedding1 = generate_embedding(image1)
     embedding2 = generate_embedding(image2)

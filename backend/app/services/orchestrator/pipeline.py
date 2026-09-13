@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 
 from app.storage.files import file_storage
 from app.services.ocr.engine import ocr_service
+from app.services.passport_verification_service import passport_verification_service
 from app.services.validation.service import validation_service
 from app.services.tampering.service import tampering_service
 from app.services.face.service import face_service
@@ -55,6 +56,32 @@ class ScreeningPipeline:
         if ocr_result.get("adaptive_actions"):
             orchestration_logs.extend(ocr_result["adaptive_actions"])
 
+        # Forward canonical orientation-normalized image to downstream vision models
+        canonical_img = ocr_result.get("canonical_image")
+        proc_doc = canonical_img if canonical_img is not None else doc_path
+
+        # Stage 1.5: Document-Level Passport Classification (ML Model)
+        logger.info("[%s] Running PassportVerificationModel...", doc_id)
+        passport_verification_res = passport_verification_service.classify_document(proc_doc)
+        if passport_verification_res.get("is_passport"):
+            orchestration_logs.append({
+                "stage": "passport_verification",
+                "action": "DOCUMENT_TYPE_CONFIRMED",
+                "reason": f"PassportVerificationModel confirmed passport structure ({passport_verification_res.get('confidence', 0.0) * 100:.0f}% confidence)."
+            })
+        elif passport_verification_res.get("status") == "UNCERTAIN":
+            orchestration_logs.append({
+                "stage": "passport_verification",
+                "action": "DOCUMENT_TYPE_UNCERTAIN",
+                "reason": "Passport classification inconclusive. Manual officer inspection required."
+            })
+        else:
+            orchestration_logs.append({
+                "stage": "passport_verification",
+                "action": "DOCUMENT_TYPE_MISMATCH",
+                "reason": f"Input document classified as {passport_verification_res.get('status')} ({passport_verification_res.get('confidence', 0.0) * 100:.0f}% passport confidence)."
+            })
+
         # 3. Stage 2: Document Field Validation
         logger.info("[%s] Running document validation...", doc_id)
         validation_result = validation_service.validate(
@@ -64,14 +91,14 @@ class ScreeningPipeline:
 
         # 4. Stage 3: Tampering Detection
         logger.info("[%s] Running tampering detection...", doc_id)
-        tampering_result = tampering_service.analyze(doc_path)
+        tampering_result = tampering_service.analyze(proc_doc)
         if tampering_result.get("adaptive_actions"):
             orchestration_logs.extend(tampering_result["adaptive_actions"])
 
         # 5. Stage 4: Face Verification
         logger.info("[%s] Running face verification...", doc_id)
         face_result = face_service.verify(
-            document_image=doc_path,
+            document_image=proc_doc,
             selfie_image=selfie_path if selfie_path else None
         )
         if face_result.get("adaptive_actions"):
@@ -80,6 +107,8 @@ class ScreeningPipeline:
         # 6. Stage 5: RAG Grounded Explanations
         logger.info("[%s] Retrieving grounded RAG explanations...", doc_id)
         flagged_issues = list(validation_result.get("failed_checks", []))
+        if passport_verification_res.get("is_passport") is False and document_type.lower() == "passport":
+            flagged_issues.append("Document visual layout mismatch: expected passport format.")
         if tampering_result.get("flagged"):
             flagged_issues.append("High tampering risk (probability of digital editing).")
         if face_result.get("status") == "completed" and face_result.get("match") is False:
@@ -93,12 +122,15 @@ class ScreeningPipeline:
             ocr_result=ocr_result,
             validation_result=validation_result,
             tampering_result=tampering_result,
-            face_result=face_result
+            face_result=face_result,
+            passport_verification=passport_verification_res,
+            document_type=document_type
         )
 
         # 8. Compile Unified Frontend-Compatible Screening Report
         overall_conf_pct = int(ocr_result["ocr_confidence"] * 100)
         fields = ocr_result["fields"]
+        sources = ocr_result.get("field_sources", {})
 
         # Format validation items for frontend checklist
         frontend_validation = []
@@ -109,27 +141,32 @@ class ScreeningPipeline:
                 "explanation": chk["message"]
             })
 
-        # Format OCR fields with confidence bars
+        # Format OCR fields with confidence bars and extraction source
         frontend_ocr = {
             "name": {
                 "value": fields.get("name") or "Not Detected",
-                "confidence": int(ocr_result["confidence"].get("name", 0) * 100) if fields.get("name") else 0
+                "confidence": int(ocr_result["confidence"].get("name", 0) * 100) if fields.get("name") else 0,
+                "source": sources.get("name", "OCR")
             },
             "idNumber": {
                 "value": fields.get("passport_number") or fields.get("document_number") or "Not Detected",
-                "confidence": int(ocr_result["confidence"].get("passport_number", 0) * 100) if fields.get("passport_number") else 0
+                "confidence": int(ocr_result["confidence"].get("passport_number", 0) * 100) if fields.get("passport_number") else 0,
+                "source": sources.get("passport_number", "OCR")
             },
             "dateOfBirth": {
                 "value": fields.get("date_of_birth") or "Not Detected",
-                "confidence": int(ocr_result["confidence"].get("date_of_birth", 0) * 100) if fields.get("date_of_birth") else 0
+                "confidence": int(ocr_result["confidence"].get("date_of_birth", 0) * 100) if fields.get("date_of_birth") else 0,
+                "source": sources.get("date_of_birth", "OCR")
             },
             "nationality": {
                 "value": fields.get("nationality") or "Not Detected",
-                "confidence": int(ocr_result["confidence"].get("nationality", 0) * 100) if fields.get("nationality") else 0
+                "confidence": int(ocr_result["confidence"].get("nationality", 0) * 100) if fields.get("nationality") else 0,
+                "source": sources.get("nationality", "OCR")
             },
             "expiryDate": {
                 "value": fields.get("expiry_date") or "Not Detected",
-                "confidence": int(ocr_result["confidence"].get("expiry_date", 0) * 100) if fields.get("expiry_date") else 0
+                "confidence": int(ocr_result["confidence"].get("expiry_date", 0) * 100) if fields.get("expiry_date") else 0,
+                "source": sources.get("expiry_date", "OCR")
             }
         }
 
@@ -138,10 +175,14 @@ class ScreeningPipeline:
         sim_val = face_result.get("similarity")
         frontend_face = {
             "similarity": int(sim_val * 100) if sim_val is not None else 0,
-            "threshold": int(face_result.get("threshold", 0.75) * 100),
+            "threshold": int(face_result.get("threshold", 0.58) * 100),
             "match": face_match if face_match is not None else False,
             "status": face_result.get("status", "SKIPPED"),
-            "verification_status": face_result.get("verification_status", "not_performed")
+            "verification_status": face_result.get("verification_status", "not_performed"),
+            "model": face_result.get("model", "FaceNet"),
+            "document_face_detected": face_result.get("document_face_detected", False),
+            "presented_face_detected": face_result.get("presented_face_detected", False),
+            "document_face_bbox": face_result.get("document_face_bbox")
         }
 
         report = {
@@ -152,6 +193,16 @@ class ScreeningPipeline:
             "extracted_fields": fields,
             "ocr_confidence": ocr_result["ocr_confidence"],
             "ocr": frontend_ocr,
+            "mrz": ocr_result.get("mrz_data"),
+            "passport_verification": {
+                "is_passport": passport_verification_res["is_passport"],
+                "confidence": passport_verification_res["confidence"],
+                "confidence_pct": int(round(passport_verification_res["confidence"] * 100)),
+                "status": passport_verification_res["status"],
+                "model": passport_verification_res.get("model", "passport_verifier"),
+                "model_version": passport_verification_res.get("model_version", "1.0.0"),
+                "features": passport_verification_res.get("features", 33)
+            },
             "validation": frontend_validation,
             "tampering": {
                 "level": tampering_result["level"],
@@ -160,6 +211,8 @@ class ScreeningPipeline:
                 "explanation": tampering_result["explanation"],
                 "flagged": tampering_result["flagged"],
                 "flaggedRegion": tampering_result["flaggedRegion"],
+                "raw_matches": tampering_result.get("copy_move", {}).get("raw_matches", 0),
+                "verified_inliers": tampering_result.get("copy_move", {}).get("verified_inliers", 0),
                 "indicators": [k for k, v in tampering_result.get("copy_move", {}).items() if v]
             },
             "face_verification": frontend_face,
@@ -176,18 +229,36 @@ class ScreeningPipeline:
             },
             "rag_explanations": rag_explanations,
             "orchestration_logs": orchestration_logs,
+            "diagnostics": {
+                "ocr_sources": sources,
+                "mrz_validity": {
+                    "passport_number": ocr_result.get("mrz_data", {}).get("passport_number_valid", False) if ocr_result.get("mrz_data") else False,
+                    "date_of_birth": ocr_result.get("mrz_data", {}).get("date_of_birth_valid", False) if ocr_result.get("mrz_data") else False,
+                    "expiry_date": ocr_result.get("mrz_data", {}).get("expiry_date_valid", False) if ocr_result.get("mrz_data") else False,
+                },
+                "passport_verification": {
+                    "is_passport": passport_verification_res["is_passport"],
+                    "confidence": passport_verification_res["confidence"],
+                    "status": passport_verification_res["status"],
+                    "features": passport_verification_res.get("features", 33),
+                    "model": passport_verification_res.get("model", "passport_verifier")
+                },
+                "face_model": face_result.get("model", "FaceNet"),
+                "tampering_inliers": tampering_result.get("copy_move", {}).get("verified_inliers", 0)
+            },
             "decision_note": "Human officer review required"
         }
 
-        # 9. Persist to Database
+        # 9. Persist to Database (exclude non-serializable ndarrays)
         try:
             db = SessionLocal()
+            ocr_data_clean = {k: v for k, v in ocr_result.items() if k != "canonical_image"}
             record = ScreeningRecord(
                 document_id=doc_id,
                 filename=document_filename,
                 document_type=document_type,
                 status="completed",
-                ocr_data=ocr_result,
+                ocr_data=ocr_data_clean,
                 validation_data=validation_result,
                 tampering_data=tampering_result,
                 face_data=face_result,

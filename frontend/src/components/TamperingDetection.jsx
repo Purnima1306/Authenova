@@ -59,6 +59,11 @@ function TamperingDetection({ tampering, docPreview }) {
             />
           </div>
 
+          <div style={{ display: 'flex', gap: '16px', marginTop: '10px', fontSize: '0.8rem', color: 'var(--text-muted, #94a3b8)' }}>
+            <span>Raw Feature Matches: <strong>{tampering.raw_matches ?? 'N/A'}</strong></span>
+            <span>RANSAC Verified Inliers: <strong>{tampering.verified_inliers ?? 0}</strong></span>
+          </div>
+
           <p className="tampering-explanation">{tampering.explanation}</p>
 
           {tampering.flagged && (

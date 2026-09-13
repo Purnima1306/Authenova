@@ -17,10 +17,14 @@ class RiskService:
         ocr_result: Dict[str, Any],
         validation_result: Dict[str, Any],
         tampering_result: Dict[str, Any],
-        face_result: Optional[Dict[str, Any]] = None
+        face_result: Optional[Dict[str, Any]] = None,
+        passport_verification: Optional[Dict[str, Any]] = None,
+        document_type: str = "passport"
     ) -> Dict[str, Any]:
         """
         Calculate composite risk score and factor explanations.
+        Incorporates document validation, digital tampering, biometric verification,
+        OCR completeness, and ML passport document-type classification.
         """
         # 1. Validation Risk (0-100)
         failed_checks = validation_result.get("failed_checks", [])
@@ -46,22 +50,33 @@ class RiskService:
             tamp_reason = f"High tampering risk ({tamp_risk:.0f}% manipulation probability). Flagged visual inconsistencies."
             tamp_tone = "fail"
 
-        # 3. Face Risk (0-100)
+        # 3. Face Biometric Risk (0-100)
         face_status = face_result.get("status") if face_result else "SKIPPED"
         has_face = face_status == "completed" and face_result.get("similarity") is not None
 
         if has_face:
             sim = face_result["similarity"]
-            face_risk = round(max(0.0, 100.0 - (sim * 100)), 2)
-            if face_risk <= 30:
-                face_reason = f"High facial similarity ({sim * 100:.0f}% match with presented selfie)."
+            threshold = face_result.get("threshold", 0.58)
+            is_match = face_result.get("match")
+            if is_match is None:
+                is_match = (sim >= threshold)
+
+            if is_match:
+                # Confirmed biometric match
+                face_risk = 0.0
+                face_reason = f"Biometric verification confirmed ({sim * 100:.1f}% similarity exceeds calibration threshold {threshold * 100:.0f}%)."
                 face_tone = "pass"
-            elif face_risk <= 50:
-                face_reason = f"Borderline facial similarity ({sim * 100:.0f}% match). Ambiguous match requires verification."
-                face_tone = "warning"
             else:
-                face_reason = f"Low facial similarity ({sim * 100:.0f}% match). Possible impersonation."
+                # Genuine biometric mismatch / impostor risk
+                deficit = max(0.0, threshold - sim)
+                face_risk = round(min(100.0, 50.0 + (deficit / threshold) * 50.0), 1)
+                face_reason = f"Biometric mismatch detected ({sim * 100:.1f}% similarity below threshold {threshold * 100:.0f}%). Possible impersonation."
                 face_tone = "fail"
+        elif face_status in ("no_face_document", "no_face_presented"):
+            # Face not isolated from image - operational inspection required, not necessarily fraud
+            face_risk = 15.0
+            face_reason = f"Face detector could not reliably isolate portrait from image ({face_status}). Manual photo inspection required."
+            face_tone = "warning"
         else:
             face_risk = 0.0
             face_reason = "Face verification skipped (no selfie provided). Does not penalize risk."
@@ -73,39 +88,88 @@ class RiskService:
         fields = ocr_result.get("fields", {})
         missing_count = sum(1 for v in fields.values() if v is None)
         missing_risk = (missing_count / max(1, len(fields))) * 100
-        comp_risk = round((ocr_conf_risk * 0.5) + (missing_risk * 0.5), 2)
+        comp_risk = round((ocr_conf_risk * 0.4) + (missing_risk * 0.6), 2)
 
-        if comp_risk <= 25:
-            comp_reason = f"High OCR confidence ({ocr_conf * 100:.0f}%) and complete document fields."
+        if comp_risk <= 20:
+            comp_reason = f"High extraction confidence ({ocr_conf * 100:.0f}%) with complete identity fields."
             comp_tone = "pass"
-        elif comp_risk <= 60:
-            comp_reason = f"Moderate OCR confidence ({ocr_conf * 100:.0f}%) or partial missing fields."
+        elif comp_risk <= 50:
+            comp_reason = f"Moderate extraction confidence ({ocr_conf * 100:.0f}%). Some fields require manual inspection."
             comp_tone = "warning"
         else:
-            comp_reason = f"Low OCR extraction confidence ({ocr_conf * 100:.0f}%) with {missing_count} missing fields."
-            comp_tone = "fail"
+            comp_reason = f"Identity fields could not be reliably extracted ({ocr_conf * 100:.0f}%, {missing_count} missing fields) — manual document verification required."
+            comp_tone = "warning"
+
+        # 5. Passport Classification Signal (0-100)
+        doc_risk = 0.0
+        doc_reason = "Passport classification not evaluated."
+        doc_tone = "pass"
+        has_passport_verification = passport_verification is not None
+
+        if has_passport_verification:
+            is_passport = passport_verification.get("is_passport")
+            conf = passport_verification.get("confidence", 0.0)
+            status = passport_verification.get("status", "UNCERTAIN")
+
+            if document_type.lower() == "passport":
+                if not is_passport:
+                    if status == "UNCERTAIN":
+                        doc_risk = 15.0
+                        doc_reason = "Passport classification inconclusive due to scan quality or service limits. Manual inspection advised."
+                        doc_tone = "warning"
+                    else:
+                        doc_risk = 50.0
+                        doc_reason = f"Document type classification mismatch: classified as {status} ({conf * 100:.0f}% passport confidence). Expected Passport."
+                        doc_tone = "fail"
+                else:
+                    doc_risk = 0.0
+                    doc_reason = f"Passport document layout confirmed by classification model ({conf * 100:.0f}% confidence)."
+                    doc_tone = "pass"
+            else:
+                doc_risk = 0.0
+                doc_reason = f"Passport classifier evaluated document (status: {status})."
+                doc_tone = "pass"
 
         # Weighted combination
         if has_face:
-            w_val, w_tamp, w_face, w_comp = 0.20, 0.40, 0.30, 0.10
+            if has_passport_verification:
+                w_val, w_tamp, w_face, w_comp, w_doc = 0.20, 0.40, 0.25, 0.05, 0.10
+            else:
+                w_val, w_tamp, w_face, w_comp, w_doc = 0.20, 0.40, 0.30, 0.10, 0.0
         else:
             # Rebalance weights when selfie is absent
-            w_val, w_tamp, w_face, w_comp = 0.30, 0.55, 0.0, 0.15
+            if has_passport_verification:
+                w_val, w_tamp, w_face, w_comp, w_doc = 0.25, 0.50, 0.0, 0.15, 0.10
+            else:
+                w_val, w_tamp, w_face, w_comp, w_doc = 0.30, 0.55, 0.0, 0.15, 0.0
 
         final_score = round(
             (val_risk * w_val) +
             (tamp_risk * w_tamp) +
             (face_risk * w_face) +
-            (comp_risk * w_comp),
+            (comp_risk * w_comp) +
+            (doc_risk * w_doc),
             1
         )
+        # Critical fraud flags enforcement:
+        # Biometric mismatch, confirmed tampering, or document type mismatch must never pass as LOW risk
+        if tampering_result.get("flagged") and has_face and not is_match:
+            # Compound fraud: both photo tampering and biometric impostor detected
+            final_score = max(final_score, 65.0)
+        elif has_face and not is_match:
+            final_score = max(final_score, 45.0)
+        elif tampering_result.get("flagged"):
+            final_score = max(final_score, 50.0)
+        elif has_passport_verification and doc_tone == "fail":
+            final_score = max(final_score, 45.0)
+
         final_score = max(0.0, min(100.0, final_score))
 
         # Risk level
-        if final_score <= 30.0:
+        if final_score <= 25.0:
             level = "LOW"
             overall_status = "pass"
-        elif final_score <= 70.0:
+        elif final_score <= 60.0:
             level = "MEDIUM"
             overall_status = "warning"
         else:
@@ -118,6 +182,8 @@ class RiskService:
             {"text": face_reason, "tone": face_tone, "module": "face"},
             {"text": comp_reason, "tone": comp_tone, "module": "ocr"}
         ]
+        if has_passport_verification:
+            reasons.append({"text": doc_reason, "tone": doc_tone, "module": "passport_verification"})
 
         factors = [
             {"factor": "Document validation", "contribution": round(val_risk * w_val, 1), "explanation": val_reason},
@@ -125,6 +191,8 @@ class RiskService:
             {"factor": "Face verification", "contribution": round(face_risk * w_face, 1), "explanation": face_reason},
             {"factor": "Completeness & OCR", "contribution": round(comp_risk * w_comp, 1), "explanation": comp_reason}
         ]
+        if has_passport_verification:
+            factors.append({"factor": "Passport classification", "contribution": round(doc_risk * w_doc, 1), "explanation": doc_reason})
 
         return {
             "score": final_score,
