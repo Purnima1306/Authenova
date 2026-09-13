@@ -1,10 +1,36 @@
-from fastapi import FastAPI, UploadFile, File
+"""
+Authenova Main FastAPI Application
+AI-powered identity and document verification platform.
+"""
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.database.session import init_db
 from app.api.routes import health, upload, extraction, validation, tampering, face, risk, report, screening
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize persistent storage / tables on startup
+    init_db()
+    yield
+
 
 app = FastAPI(
     title="Authenova API",
     description="AI-powered identity and document verification platform",
-    version="0.1.0"
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS Middleware to allow React development server
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include all API routers
@@ -23,7 +49,6 @@ app.include_router(screening.router, prefix="/api/v1", tags=["screening"])
 def root():
     return {
         "message": "Authenova API is running",
-        "version": "0.1.0"
+        "version": "1.0.0",
+        "status": "operational"
     }
-
-

@@ -1,53 +1,45 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from app.schemas.risk import RiskResponse, RiskData, RiskFactor
+from typing import Dict, Any, Optional
+from app.services.risk.service import risk_service
 
 router = APIRouter()
 
 
 class RiskRequest(BaseModel):
     document_id: str
-    ocr_confidence: float
-    validation_result: dict
-    tampering_result: dict
-    face_result: dict
+    ocr_confidence: float = 1.0
+    fields: Optional[Dict[str, Any]] = None
+    validation_result: Dict[str, Any]
+    tampering_result: Dict[str, Any]
+    face_result: Optional[Dict[str, Any]] = None
 
 
-@router.post("/calculate-risk", response_model=RiskResponse)
+@router.post("/calculate-risk")
 async def calculate_risk(request: RiskRequest):
     """
-    Calculate an explainable risk score by combining signals from all verification modules.
-    Returns risk level, score, and contributing factors with explanations.
+    Calculate an explainable risk score by combining real signals from
+    OCR, validation, tampering, and face verification modules.
     """
-    # Mock implementation - will be replaced with actual risk scoring engine
-    return RiskResponse(
-        success=True,
-        data=RiskData(
-            document_id=request.document_id,
-            risk_score=18.0,
-            risk_level="low",
-            factors=[
-                RiskFactor(
-                    factor="OCR confidence",
-                    contribution=2.0,
-                    explanation="High OCR confidence"
-                ),
-                RiskFactor(
-                    factor="Document validation",
-                    contribution=0.0,
-                    explanation="No validation issues detected"
-                ),
-                RiskFactor(
-                    factor="Tampering analysis",
-                    contribution=8.0,
-                    explanation="Minor stamp-region irregularity detected"
-                ),
-                RiskFactor(
-                    factor="Face verification",
-                    contribution=8.0,
-                    explanation="High facial similarity"
-                )
-            ]
-        ),
-        errors=[]
+    ocr_dict = {
+        "ocr_confidence": request.ocr_confidence,
+        "fields": request.fields or {}
+    }
+    result = risk_service.calculate(
+        ocr_result=ocr_dict,
+        validation_result=request.validation_result,
+        tampering_result=request.tampering_result,
+        face_result=request.face_result
     )
+    return {
+        "success": True,
+        "data": {
+            "document_id": request.document_id,
+            "risk_score": result["score"],
+            "risk_level": result["level"],
+            "status": result["status"],
+            "reasons": result["reasons"],
+            "factors": result["factors"]
+        },
+        "errors": []
+    }

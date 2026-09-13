@@ -1,6 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from app.schemas.tampering import TamperingResponse, TamperingData, TamperingIndicators
+from typing import List, Dict, Any
+from app.services.tampering.service import tampering_service
 
 router = APIRouter()
 
@@ -10,25 +11,31 @@ class TamperingRequest(BaseModel):
     image_path: str
 
 
-@router.post("/detect-tampering", response_model=TamperingResponse)
+@router.post("/detect-tampering")
 async def detect_tampering(request: TamperingRequest):
     """
-    Analyze the document image for signs of digital tampering or manipulation.
-    Returns tampering indicators and a risk score.
+    Analyze the document image for signs of digital tampering or manipulation
+    using real ELA, copy-move detection, and metadata analysis.
     """
-    # Mock implementation - will be replaced with actual tampering detection service
-    return TamperingResponse(
-        success=True,
-        data=TamperingData(
-            document_id=request.document_id,
-            tampering_score=0.18,
-            indicators=TamperingIndicators(
-                photo_region_anomaly=False,
-                text_region_anomaly=False,
-                stamp_irregularity=True,
-                metadata_anomaly=False
-            ),
-            evidence=["Possible irregularity detected in stamp region"]
-        ),
-        errors=[]
-    )
+    try:
+        result = tampering_service.analyze(request.image_path)
+        return {
+            "success": True,
+            "data": {
+                "document_id": request.document_id,
+                "tampering_score": result["tampering_score"],
+                "level": result["level"],
+                "indicators": result.get("indicators", []),
+                "evidence": result["evidence"],
+                "flagged": result["flagged"],
+                "flaggedRegion": result["flaggedRegion"],
+                "ela": result["ela"],
+                "copy_move": result["copy_move"],
+                "metadata": result["metadata"]
+            },
+            "errors": []
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Tampering analysis failed: {str(e)}")
