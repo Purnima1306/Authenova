@@ -134,7 +134,7 @@ class TamperingService:
             tag_name = TAGS.get(tag_id, str(tag_id))
             str_val = str(val)
             tags[tag_name] = str_val
-            for sig in suspicious_signatures:
+            for sig in editing_signatures:
                 if sig in str_val.lower():
                     suspicious_software = True
                     evidence.append(f"Image contains {tag_name} referencing '{str_val}'")

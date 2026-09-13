@@ -33,17 +33,17 @@ def verify_images(reference_image, test_image, threshold=0.70):
         raise ValueError("No face detected in test image.")
 
     # Compare embeddings
-    similarity = verify_faces(
+    similarity, result = verify_faces(
         reference_embedding,
-        test_embedding
+        test_embedding,
+        threshold=threshold
     )
 
-    # Apply threshold
-    verified = similarity >= threshold
+    verified = result == "PASS"
 
     return {
         "verified": verified,
         "similarity": round(float(similarity), 4),
         "threshold": threshold,
-        "result": "PASS" if verified else "FAIL"
+        "result": result
     }

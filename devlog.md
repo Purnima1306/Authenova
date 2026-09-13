@@ -568,3 +568,172 @@ The FastAPI backend now exposes the complete document-screening API surface unde
 
 ### Next Recommended Step
 Replace the mock pipeline stages one at a time with the actual analysis services, starting with OCR, keeping the existing API contract intact.
+
+## Iteration 3 — 2026-09-13
+
+### Milestone
+Milestone 3 — Complete End-to-End System Integration & Empirical Verification
+
+### Objective
+Integrate all isolated modules (OCR, rule-based validation, tampering detection, face matching, RAG explanations, and weighted risk engine) into a unified FastAPI screening pipeline, implement persistent SQLite/PostgreSQL storage, wire the React frontend to real backend endpoints, fix Dockerfiles, and verify the complete workflow with real test images.
+
+### Changes Made
+- Installed system `tesseract-ocr` 5.5.3 via Homebrew and verified OCR execution on synthetic documents.
+- Refactored OCR engine in `backend/app/services/ocr/engine.py` with `OcrService` class, `TESSERACT_CMD` environment detection, per-field confidence scores, and adaptive CLAHE retry when confidence is low.
+- Created `backend/app/services/validation/service.py` (`ValidationService`) migrating field-level format and logical checks for passport, aadhaar, visa, and permit from `temp_validation_risk_rag/`.
+- Created `backend/app/services/tampering/service.py` (`TamperingService`) uniting Error Level Analysis (ELA), ORB keypoint copy-move forgery detection with percentage bounding-box generation, EXIF metadata inspection, and adaptive deep scan for borderline cases.
+- Created `backend/app/services/face/service.py` (`FaceService`) with Haar face detection, FaceNet embeddings and spatial gradient fallback, and graceful handling when a selfie is omitted (`status: SKIPPED`).
+- Fixed API signature mismatch in `face-verification/app/verifier.py` and `face-verification/app/service.py` so `verify_faces` returns `(similarity, result)`. All 5 tests in `face-verification/` now pass.
+- Created `backend/app/services/rag/service.py` (`RagExplanationService`) providing grounded standards citations for flagged validation, tampering, or face anomalies.
+- Created `backend/app/services/risk/service.py` (`RiskService`) calculating weighted, explainable risk scores (20% validation, 40% tampering, 30% face, 10% completeness) with automatic weight rebalancing when selfie is skipped.
+- Created `backend/app/storage/files.py` (`FileStorageService`) for safe file uploads with UUID identifiers and extension/size validation.
+- Created `backend/app/database/session.py` and `backend/app/models/screening.py` with SQLAlchemy for persistent SQLite (`data/authenova.db`) and PostgreSQL support.
+- Refactored `backend/app/services/orchestrator/pipeline.py` to chain all real services and persist records to database.
+- Updated all API routes (`screening.py`, `upload.py`, `extraction.py`, `validation.py`, `tampering.py`, `face.py`, `risk.py`, `report.py`) and added `/api/v1/decision/{document_id}` for human officer decisions.
+- Updated `backend/app/main.py` with CORS middleware and database startup initialization.
+- Updated frontend (`App.jsx`, `UploadPage.jsx`, `PipelineProgress.jsx`, `ResultsPage.jsx`, `OfficerDecision.jsx`) to communicate directly with FastAPI `/api/v1/screen` and `/api/v1/decision/{id}`, removing `mockData.js` from the production screening flow.
+- Updated `backend/Dockerfile` with `tesseract-ocr` and `libgl1`. Created `frontend/Dockerfile` and fixed `docker-compose.yml`.
+- Replaced mock unit tests in `backend/tests/test_api.py` with 12 real tests exercising multi-condition document screenings and database persistence across process restarts.
+
+### Files Created
+- `backend/app/services/validation/service.py`
+- `backend/app/services/tampering/service.py`
+- `backend/app/services/face/service.py`
+- `backend/app/services/rag/service.py`
+- `backend/app/services/risk/service.py`
+- `backend/app/storage/files.py`
+- `backend/app/database/session.py`
+- `backend/app/models/screening.py`
+- `frontend/Dockerfile`
+
+### Files Modified
+- `backend/requirements.txt`
+- `backend/Dockerfile`
+- `docker-compose.yml`
+- `backend/app/main.py`
+- `backend/app/services/ocr/engine.py`
+- `backend/app/services/ocr/__init__.py`
+- `backend/app/services/validation/__init__.py`
+- `backend/app/services/tampering/__init__.py`
+- `backend/app/services/face/__init__.py`
+- `backend/app/services/rag/__init__.py`
+- `backend/app/services/risk/__init__.py`
+- `backend/app/services/orchestrator/pipeline.py`
+- `backend/app/api/routes/screening.py`
+- `backend/app/api/routes/upload.py`
+- `backend/app/api/routes/extraction.py`
+- `backend/app/api/routes/validation.py`
+- `backend/app/api/routes/tampering.py`
+- `backend/app/api/routes/face.py`
+- `backend/app/api/routes/risk.py`
+- `backend/app/api/routes/report.py`
+- `backend/tests/test_api.py`
+- `face-verification/app/verifier.py`
+- `face-verification/app/service.py`
+- `face-verification/app/embedder.py`
+- `face-verification/test_service.py`
+- `face-verification/test_verification.py`
+- `frontend/src/App.jsx`
+- `frontend/src/components/UploadPage.jsx`
+- `frontend/src/components/PipelineProgress.jsx`
+- `frontend/src/components/ResultsPage.jsx`
+- `frontend/src/components/OfficerDecision.jsx`
+- `devlog.md`
+
+### Files Deleted
+- None
+
+### Dependencies Changed
+- Added `sqlalchemy>=2.0.0` and `aiosqlite>=0.20.0` to `backend/requirements.txt`.
+- Installed `scipy`, `keras-facenet`, `tensorflow` into the virtual environment.
+
+### Verification
+- `pytest backend/tests/test_api.py -v` — PASS (12 passed in 1.47s with real OCR, validation, tampering, face, risk, and persistence)
+- `pytest face-verification/ -v` — PASS (5 passed in 4.55s)
+- `npm run lint` (frontend) — PASS (0 errors)
+- `npm run build` (frontend) — PASS (Vite built 210 kB JS, 13.18 kB CSS)
+- `docker compose config` — PASS (valid YAML and service specifications)
+- In-memory wipe & SQLite restart test — PASS (records and officer decisions persisted)
+- End-to-end real screening (`POST /api/v1/screen`) — PASS (returned real extracted fields, tampering heatmap coordinates, risk level, and RAG citations)
+
+### Current State
+Authenova is now an integrated, executable identity and document screening platform. The React frontend dispatches multipart file uploads to FastAPI, which orchestrates real computer vision and machine learning analysis services, calculates explainable weighted risk, retrieves grounded standards citations, persists results to database, and records human officer decisions.
+
+### Known Issues
+- Real-world ID documents have diverse bilingual and non-standard layouts beyond the current synthetic passport regex rules; production deployments should expand regex patterns or integrate layout-aware parsers.
+
+### Decisions
+- Rebalanced risk weights dynamically when a selfie is omitted (Tampering 55%, Validation 30%, Completeness 15%) so that the lack of a selfie does not unfairly penalize an applicant.
+- Defaulted to SQLite in `data/authenova.db` with seamless PostgreSQL override via `DATABASE_URL` so that local development and testing work immediately without requiring a running Docker daemon.
+- Preserved `mockData.js` strictly as reference data and demo credentials (`officer1`/`authenova123`), while completely excising it from the screening pipeline.
+
+### Remaining Work
+- Expand training / testing dataset with consented real-world identity document templates.
+- Add user management / JWT authentication to replace demo officer credentials.
+
+### Next Recommended Step
+Deploy the integrated stack using `docker compose up --build` in a staging environment for live officer acceptance testing.
+
+---
+
+## Iteration 4 — 2026-09-13
+
+### Milestone
+Milestone 4 — Live Daemon Verification & Execution Resilience
+
+### Objective
+Verify live concurrent execution of FastAPI backend and Vite frontend daemons, add root `pytest.ini` for unified test execution, harden face-verification standalone script paths, and validate live end-to-end API workflows with officer decision persistence.
+
+### Changes Made
+- Created root `pytest.ini` configuring `backend/tests` as primary testpaths and setting pythonpath to `backend`.
+- Guarded standalone test scripts `face-verification/test_service.py`, `face-verification/test_embedding.py`, and `face-verification/test_verifier.py` with `if __name__ == "__main__":` blocks and path resolution relative to `Path(__file__).parent` to avoid premature execution during test discovery.
+- Started backend daemon on port 8000 (`uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000`).
+- Started frontend dev server daemon on port 5173 (`npm run dev -- --host 127.0.0.1 --port 5173`).
+- Verified live `POST /api/v1/screen` pipeline with real document image: successfully returned document ID `DOC-A51D0AED`, OCR fields, ORB copy-move matches, grounded RAG citations, and risk assessment.
+- Verified live `POST /api/v1/decision/DOC-A51D0AED` and confirmed persistence of the officer decision (`Flagged for Review`) via `GET /api/v1/results/DOC-A51D0AED`.
+
+### Files Created
+- `pytest.ini`
+
+### Files Modified
+- `face-verification/test_service.py`
+- `face-verification/test_embedding.py`
+- `face-verification/test_verifier.py`
+- `devlog.md`
+
+### Files Deleted
+- None
+
+### Dependencies Changed
+- None
+
+### Verification
+- `pytest -v` (from workspace root) — PASS (12 passed in 1.30s)
+- `cd face-verification && ../venv/bin/pytest -v` — PASS (5 passed in 4.87s)
+- `npm run lint` & `npm run build` — PASS (0 errors, 0 warnings)
+- `curl -s http://127.0.0.1:8000/api/v1/health` — PASS (`{"status":"healthy"}`)
+- `curl -s http://127.0.0.1:5173/` — PASS (HTML shell served by Vite)
+- Live `POST /api/v1/screen` — PASS (Full screening report generated)
+- Live `POST /api/v1/decision/DOC-A51D0AED` & `GET /api/v1/results/DOC-A51D0AED` — PASS (Decision persisted to SQLite DB)
+
+- Fixed variable reference in `backend/app/services/tampering/service.py`: `suspicious_signatures` replaced with `editing_signatures` inside EXIF metadata analysis.
+- Added regression test `test_detect_tampering_with_exif_metadata` to `backend/tests/test_api.py`.
+- Implemented real-time webcam photo capture in `frontend/src/components/UploadPage.jsx` using `navigator.mediaDevices.getUserMedia`, `<video>`, `<canvas>`, face alignment guide overlay, and fallback to image file upload.
+
+
+### Current State
+Backend and frontend servers are actively running in the background. The full document upload → OCR → validation → tampering analysis → face verification → RAG explanations → risk assessment → decision recording pipeline is fully integrated and functioning end-to-end.
+
+### Known Issues
+- Playwright browser driver download failed with 404 from upstream CDN when attempting automated headless browser navigation (`playwright-1.57.0-mac-arm64.zip`). The web server runs and can be accessed directly in any host browser at `http://127.0.0.1:5173`.
+
+### Decisions
+- Added root `pytest.ini` to streamline automated test execution across developer environments without needing complex PYTHONPATH flags.
+
+### Remaining Work
+- Open frontend in a standard desktop browser for user demonstration.
+
+### Next Recommended Step
+Verify visual rendering and interactive flows directly in the browser at `http://127.0.0.1:5173`.
+
+

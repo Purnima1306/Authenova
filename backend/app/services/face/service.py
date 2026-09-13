@@ -15,6 +15,13 @@ from PIL import Image
 CASCADE_PATH = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
 
+try:
+    from keras_facenet import FaceNet
+    facenet_embedder = FaceNet()
+except Exception:
+    facenet_embedder = None
+
+
 
 def cosine_similarity(v1: np.ndarray, v2: np.ndarray) -> float:
     """Calculate cosine similarity between two feature vectors."""
@@ -73,10 +80,22 @@ class FaceService:
     def extract_face_features(self, face_crop: np.ndarray) -> np.ndarray:
         """
         Extract normalized multi-feature face descriptor.
-        Uses standardized spatial color/intensity histograms and gradient projections.
+        Prefers FaceNet 512-d embeddings if available; falls back to spatial color/gradient histograms.
         """
+        if facenet_embedder is not None:
+            try:
+                rgb_crop = cv2.cvtColor(face_crop, cv2.COLOR_BGR2RGB)
+                embeddings = facenet_embedder.extract(rgb_crop, threshold=0.70)
+                if embeddings:
+                    emb = np.asarray(embeddings[0]["embedding"], dtype=np.float32)
+                    norm = np.linalg.norm(emb)
+                    return emb / norm if norm > 0 else emb
+            except Exception:
+                pass
+
         resized = cv2.resize(face_crop, (128, 128))
         gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+
 
         # Color histograms across channels
         hist_b = cv2.calcHist([resized], [0], None, [32], [0, 256])

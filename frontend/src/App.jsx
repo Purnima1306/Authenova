@@ -4,15 +4,9 @@ import LoginPage from './components/LoginPage';
 import UploadPage from './components/UploadPage';
 import PipelineProgress from './components/PipelineProgress';
 import ResultsPage from './components/ResultsPage';
-import { generateMockResult } from './data/mockData';
 import './App.css';
 
-// ==========================================================================
-// APP
-// Controls which screen is currently shown: login -> upload -> pipeline
-// -> results. All shared state (previews, results) lives here and is
-// passed down as props. No routing library is used to keep this simple.
-// ==========================================================================
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function App() {
   // 'login' | 'upload' | 'pipeline' | 'results'
@@ -22,6 +16,7 @@ function App() {
   const [docPreview, setDocPreview] = useState(null);
   const [facePreview, setFacePreview] = useState(null);
   const [results, setResults] = useState(null);
+  const [screeningError, setScreeningError] = useState('');
 
   function handleLoginSuccess() {
     setIsLoggedIn(true);
@@ -34,23 +29,51 @@ function App() {
     setDocPreview(null);
     setFacePreview(null);
     setResults(null);
+    setScreeningError('');
   }
 
-  function handleStartScreening({ docPreview, facePreview }) {
+  async function handleStartScreening({ docFile, faceFile, docPreview, facePreview }) {
     setDocPreview(docPreview);
     setFacePreview(facePreview);
+    setScreeningError('');
     setPage('pipeline');
-  }
 
-  function handlePipelineComplete() {
-    setResults(generateMockResult());
-    setPage('results');
+    try {
+      const formData = new FormData();
+      formData.append('file', docFile);
+      formData.append('document_type', 'passport');
+      if (faceFile) {
+        formData.append('verification_image', faceFile);
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/screen`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Server returned status ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.success || !data.report) {
+        throw new Error(data.message || 'Screening returned an incomplete report.');
+      }
+
+      setResults(data.report);
+      setPage('results');
+    } catch (err) {
+      console.error('Screening failed:', err);
+      setScreeningError(err.message || 'Failed to connect to Authenova verification server.');
+    }
   }
 
   function handleStartNew() {
     setDocPreview(null);
     setFacePreview(null);
     setResults(null);
+    setScreeningError('');
     setPage('upload');
   }
 
@@ -63,7 +86,12 @@ function App() {
 
         {page === 'upload' && <UploadPage onStartScreening={handleStartScreening} />}
 
-        {page === 'pipeline' && <PipelineProgress onComplete={handlePipelineComplete} />}
+        {page === 'pipeline' && (
+          <PipelineProgress
+            error={screeningError}
+            onRetry={handleStartNew}
+          />
+        )}
 
         {page === 'results' && results && (
           <ResultsPage

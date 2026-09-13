@@ -120,6 +120,22 @@ class TestTamperingEndpoint:
         assert "ela" in data["data"]
         assert "copy_move" in data["data"]
 
+    def test_detect_tampering_with_exif_metadata(self):
+        from PIL import Image
+        import io
+        img = Image.new("RGB", (100, 100), color="blue")
+        exif = img.getexif()
+        exif[0x0131] = "Adobe Photoshop 2024"
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", exif=exif)
+        buf.seek(0)
+
+        from app.services.tampering.service import tampering_service
+        result = tampering_service.analyze(buf.getvalue())
+        assert result["metadata"]["suspicious_software"] is True
+        assert any("Adobe Photoshop" in ev for ev in result["metadata"]["evidence"])
+
+
 
 class TestFaceVerificationEndpoint:
     def test_verify_face_match(self):
