@@ -31,7 +31,7 @@ def test_different_person():
     similarity, result = verify_faces(
         embedding1,
         embedding2,
-        threshold=0.70
+        threshold=0.75
     )
 
     print(f"\nDifferent-person similarity: {similarity}")

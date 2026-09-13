@@ -20,9 +20,10 @@ def cosine_similarity(embedding1, embedding2):
     return float(similarity)
 
 
-def verify_faces(embedding1, embedding2):
+def verify_faces(embedding1, embedding2, threshold=0.70):
     """
-    Compare two face embeddings and return cosine similarity.
+    Compare two face embeddings and return cosine similarity and result.
     """
-
-    return cosine_similarity(embedding1, embedding2)
+    similarity = cosine_similarity(embedding1, embedding2)
+    result = "PASS" if similarity >= threshold else "FAIL"
+    return similarity, result

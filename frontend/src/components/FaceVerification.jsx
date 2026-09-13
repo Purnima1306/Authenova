@@ -40,22 +40,35 @@ function FaceVerification({ faceVerification, docPreview, facePreview }) {
         </div>
       </div>
 
-      <div className="face-meter">
-        <div className="face-meter__row">
-          <span>Similarity Score</span>
-          <span className="face-meter__value">{similarity}%</span>
+      {faceVerification.status === 'SKIPPED' ? (
+        <div style={{ marginTop: '16px' }}>
+          <div className="alert alert--warning" style={{ margin: 0, fontSize: '13px' }}>
+            Biometric face verification was skipped because no live selfie was provided. This does not penalize the risk score.
+          </div>
+          <div style={{ marginTop: '10px' }} className="status-pill status-pill--lg status-pill--warning">
+            Status: Skipped (Optional)
+          </div>
         </div>
-        <div className="confidence-bar confidence-bar--wide">
-          <div
-            className={`confidence-bar__fill ${match ? 'confidence-bar__fill--pass' : 'confidence-bar__fill--fail'}`}
-            style={{ width: `${similarity}%` }}
-          />
-        </div>
-      </div>
+      ) : (
+        <>
+          <div className="face-meter">
+            <div className="face-meter__row">
+              <span>Similarity Score</span>
+              <span className="face-meter__value">{similarity}%</span>
+            </div>
+            <div className="confidence-bar confidence-bar--wide">
+              <div
+                className={`confidence-bar__fill ${match ? 'confidence-bar__fill--pass' : 'confidence-bar__fill--fail'}`}
+                style={{ width: `${similarity}%` }}
+              />
+            </div>
+          </div>
 
-      <div className={`status-pill status-pill--lg ${match ? 'status-pill--pass' : 'status-pill--fail'}`}>
-        {match ? 'Match' : 'No Match'}
-      </div>
+          <div className={`status-pill status-pill--lg ${match ? 'status-pill--pass' : 'status-pill--fail'}`}>
+            {match ? 'Match' : 'No Match'}
+          </div>
+        </>
+      )}
     </div>
   );
 }

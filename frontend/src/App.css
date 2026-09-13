@@ -382,6 +382,152 @@
   margin-top: 8px;
 }
 
+/* ---------- Live Camera Capture ---------- */
+.camera-toggle-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+}
+
+.camera-tab-btn {
+  background: transparent;
+  border: none;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.camera-tab-btn:hover {
+  color: var(--color-accent);
+}
+
+.camera-tab-btn--active {
+  background: var(--color-accent);
+  color: white;
+}
+.camera-tab-btn--active:hover {
+  color: white;
+}
+
+.camera-box {
+  position: relative;
+  background: #0b1526;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+}
+
+.camera-box__video {
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+  transform: scaleX(-1);
+  border-radius: var(--radius-md);
+}
+
+.camera-guide-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 170px;
+  height: 220px;
+  border: 2px dashed rgba(255, 255, 255, 0.75);
+  border-radius: 50% / 45%;
+  pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(11, 21, 38, 0.4);
+}
+
+.camera-guide-overlay::after {
+  content: 'Align Face Here';
+  position: absolute;
+  bottom: -26px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: white;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.camera-controls {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.camera-shutter-btn {
+  background: var(--color-pass);
+  color: white;
+  border: none;
+  padding: 10px 22px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.camera-shutter-btn:hover {
+  background: #177532;
+}
+
+.camera-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 20px;
+  text-align: center;
+  gap: 10px;
+  background: var(--color-bg);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.camera-prompt__icon {
+  font-size: 32px;
+}
+
+.camera-prompt__text {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  max-width: 340px;
+}
+
+.captured-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-pass-bg);
+  color: var(--color-pass);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--color-pass-border);
+}
+
 /* ---------- Pipeline Progress ---------- */
 .pipeline-card {
   display: flex;

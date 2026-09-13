@@ -19,3 +19,13 @@ numpy>=1.26.0
 # --- Testing ---
 pytest>=8.0.0
 httpx>=0.27.0
+
+# --- Persistence ---
+sqlalchemy>=2.0.0
+aiosqlite>=0.20.0
+
+# --- Face Verification & ML ---
+scipy>=1.11.0
+keras-facenet>=0.3.2
+tensorflow>=2.15.0
+

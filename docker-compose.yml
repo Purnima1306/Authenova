@@ -8,6 +8,7 @@ services:
       - "8000:8000"
     environment:
       - APP_ENV=development
+      - DATABASE_URL=postgresql://authenova:authenova@db:5432/authenova
     volumes:
       - ./backend:/app
     depends_on:
@@ -17,12 +18,9 @@ services:
     build:
       context: ./frontend
     ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
+      - "5173:80"
+    depends_on:
+      - backend
 
   db:
     image: postgres:15
