@@ -46,22 +46,33 @@ class RiskService:
             tamp_reason = f"High tampering risk ({tamp_risk:.0f}% manipulation probability). Flagged visual inconsistencies."
             tamp_tone = "fail"
 
-        # 3. Face Risk (0-100)
+        # 3. Face Biometric Risk (0-100)
         face_status = face_result.get("status") if face_result else "SKIPPED"
         has_face = face_status == "completed" and face_result.get("similarity") is not None
 
         if has_face:
             sim = face_result["similarity"]
-            face_risk = round(max(0.0, 100.0 - (sim * 100)), 2)
-            if face_risk <= 30:
-                face_reason = f"High facial similarity ({sim * 100:.0f}% match with presented selfie)."
+            threshold = face_result.get("threshold", 0.58)
+            is_match = face_result.get("match")
+            if is_match is None:
+                is_match = (sim >= threshold)
+
+            if is_match:
+                # Confirmed biometric match
+                face_risk = 0.0
+                face_reason = f"Biometric verification confirmed ({sim * 100:.1f}% similarity exceeds calibration threshold {threshold * 100:.0f}%)."
                 face_tone = "pass"
-            elif face_risk <= 50:
-                face_reason = f"Borderline facial similarity ({sim * 100:.0f}% match). Ambiguous match requires verification."
-                face_tone = "warning"
             else:
-                face_reason = f"Low facial similarity ({sim * 100:.0f}% match). Possible impersonation."
+                # Genuine biometric mismatch / impostor risk
+                deficit = max(0.0, threshold - sim)
+                face_risk = round(min(100.0, 50.0 + (deficit / threshold) * 50.0), 1)
+                face_reason = f"Biometric mismatch detected ({sim * 100:.1f}% similarity below threshold {threshold * 100:.0f}%). Possible impersonation."
                 face_tone = "fail"
+        elif face_status in ("no_face_document", "no_face_presented"):
+            # Face not isolated from image - operational inspection required, not necessarily fraud
+            face_risk = 15.0
+            face_reason = f"Face detector could not reliably isolate portrait from image ({face_status}). Manual photo inspection required."
+            face_tone = "warning"
         else:
             face_risk = 0.0
             face_reason = "Face verification skipped (no selfie provided). Does not penalize risk."
@@ -73,17 +84,17 @@ class RiskService:
         fields = ocr_result.get("fields", {})
         missing_count = sum(1 for v in fields.values() if v is None)
         missing_risk = (missing_count / max(1, len(fields))) * 100
-        comp_risk = round((ocr_conf_risk * 0.5) + (missing_risk * 0.5), 2)
+        comp_risk = round((ocr_conf_risk * 0.4) + (missing_risk * 0.6), 2)
 
-        if comp_risk <= 25:
-            comp_reason = f"High OCR confidence ({ocr_conf * 100:.0f}%) and complete document fields."
+        if comp_risk <= 20:
+            comp_reason = f"High extraction confidence ({ocr_conf * 100:.0f}%) with complete identity fields."
             comp_tone = "pass"
-        elif comp_risk <= 60:
-            comp_reason = f"Moderate OCR confidence ({ocr_conf * 100:.0f}%) or partial missing fields."
+        elif comp_risk <= 50:
+            comp_reason = f"Moderate extraction confidence ({ocr_conf * 100:.0f}%). Some fields require manual inspection."
             comp_tone = "warning"
         else:
-            comp_reason = f"Low OCR extraction confidence ({ocr_conf * 100:.0f}%) with {missing_count} missing fields."
-            comp_tone = "fail"
+            comp_reason = f"Identity fields could not be reliably extracted ({ocr_conf * 100:.0f}%, {missing_count} missing fields) — manual document verification required."
+            comp_tone = "warning"
 
         # Weighted combination
         if has_face:
@@ -99,13 +110,20 @@ class RiskService:
             (comp_risk * w_comp),
             1
         )
+        # Critical fraud flags enforcement:
+        # Biometric mismatch or confirmed tampering must never pass as LOW risk
+        if has_face and not is_match:
+            final_score = max(final_score, 45.0)
+        elif tampering_result.get("flagged"):
+            final_score = max(final_score, 50.0)
+
         final_score = max(0.0, min(100.0, final_score))
 
         # Risk level
-        if final_score <= 30.0:
+        if final_score <= 25.0:
             level = "LOW"
             overall_status = "pass"
-        elif final_score <= 70.0:
+        elif final_score <= 60.0:
             level = "MEDIUM"
             overall_status = "warning"
         else:

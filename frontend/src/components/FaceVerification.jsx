@@ -64,8 +64,18 @@ function FaceVerification({ faceVerification, docPreview, facePreview }) {
             </div>
           </div>
 
-          <div className={`status-pill status-pill--lg ${match ? 'status-pill--pass' : 'status-pill--fail'}`}>
-            {match ? 'Match' : 'No Match'}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '12px', flexWrap: 'wrap', gap: '8px' }}>
+            <div className={`status-pill status-pill--lg ${match ? 'status-pill--pass' : 'status-pill--fail'}`}>
+              {match ? 'Biometric Match' : 'No Match'}
+            </div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)' }}>
+              Model: <strong style={{ color: 'var(--text-primary, #f8fafc)' }}>{faceVerification.model || 'FaceNet 512-d'}</strong> • Threshold: <strong>{faceVerification.threshold || 58}%</strong>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', marginTop: '10px', fontSize: '0.8rem' }}>
+            <span>Doc Face: {faceVerification.document_face_detected ? '✅ Isolated' : '❌ Not Found'}</span>
+            <span>Live Face: {faceVerification.presented_face_detected ? '✅ Isolated' : '❌ Not Found'}</span>
           </div>
         </>
       )}

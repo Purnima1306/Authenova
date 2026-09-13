@@ -30,7 +30,14 @@ function OcrResults({ ocr }) {
               key={key}
               className={`ocr-field ${isLowConfidence ? 'ocr-field--warning' : ''}`}
             >
-              <div className="ocr-field__label">{FIELD_LABELS[key] || key}</div>
+              <div className="ocr-field__label">
+                <span>{FIELD_LABELS[key] || key}</span>
+                {field.source && (
+                  <span className="status-pill" style={{ fontSize: '0.7rem', padding: '1px 6px', marginLeft: '6px' }}>
+                    {field.source}
+                  </span>
+                )}
+              </div>
               <div className="ocr-field__value">{field.value}</div>
 
               <div className="ocr-field__confidence-row">

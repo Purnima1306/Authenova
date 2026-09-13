@@ -1,0 +1,1 @@
+from app.services.passport_verification.model import passport_verifier_model, PassportVerificationModel
