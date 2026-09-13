@@ -17,10 +17,14 @@ class RiskService:
         ocr_result: Dict[str, Any],
         validation_result: Dict[str, Any],
         tampering_result: Dict[str, Any],
-        face_result: Optional[Dict[str, Any]] = None
+        face_result: Optional[Dict[str, Any]] = None,
+        passport_verification: Optional[Dict[str, Any]] = None,
+        document_type: str = "passport"
     ) -> Dict[str, Any]:
         """
         Calculate composite risk score and factor explanations.
+        Incorporates document validation, digital tampering, biometric verification,
+        OCR completeness, and ML passport document-type classification.
         """
         # 1. Validation Risk (0-100)
         failed_checks = validation_result.get("failed_checks", [])
@@ -96,26 +100,68 @@ class RiskService:
             comp_reason = f"Identity fields could not be reliably extracted ({ocr_conf * 100:.0f}%, {missing_count} missing fields) — manual document verification required."
             comp_tone = "warning"
 
+        # 5. Passport Classification Signal (0-100)
+        doc_risk = 0.0
+        doc_reason = "Passport classification not evaluated."
+        doc_tone = "pass"
+        has_passport_verification = passport_verification is not None
+
+        if has_passport_verification:
+            is_passport = passport_verification.get("is_passport")
+            conf = passport_verification.get("confidence", 0.0)
+            status = passport_verification.get("status", "UNCERTAIN")
+
+            if document_type.lower() == "passport":
+                if not is_passport:
+                    if status == "UNCERTAIN":
+                        doc_risk = 15.0
+                        doc_reason = "Passport classification inconclusive due to scan quality or service limits. Manual inspection advised."
+                        doc_tone = "warning"
+                    else:
+                        doc_risk = 50.0
+                        doc_reason = f"Document type classification mismatch: classified as {status} ({conf * 100:.0f}% passport confidence). Expected Passport."
+                        doc_tone = "fail"
+                else:
+                    doc_risk = 0.0
+                    doc_reason = f"Passport document layout confirmed by classification model ({conf * 100:.0f}% confidence)."
+                    doc_tone = "pass"
+            else:
+                doc_risk = 0.0
+                doc_reason = f"Passport classifier evaluated document (status: {status})."
+                doc_tone = "pass"
+
         # Weighted combination
         if has_face:
-            w_val, w_tamp, w_face, w_comp = 0.20, 0.40, 0.30, 0.10
+            if has_passport_verification:
+                w_val, w_tamp, w_face, w_comp, w_doc = 0.20, 0.40, 0.25, 0.05, 0.10
+            else:
+                w_val, w_tamp, w_face, w_comp, w_doc = 0.20, 0.40, 0.30, 0.10, 0.0
         else:
             # Rebalance weights when selfie is absent
-            w_val, w_tamp, w_face, w_comp = 0.30, 0.55, 0.0, 0.15
+            if has_passport_verification:
+                w_val, w_tamp, w_face, w_comp, w_doc = 0.25, 0.50, 0.0, 0.15, 0.10
+            else:
+                w_val, w_tamp, w_face, w_comp, w_doc = 0.30, 0.55, 0.0, 0.15, 0.0
 
         final_score = round(
             (val_risk * w_val) +
             (tamp_risk * w_tamp) +
             (face_risk * w_face) +
-            (comp_risk * w_comp),
+            (comp_risk * w_comp) +
+            (doc_risk * w_doc),
             1
         )
         # Critical fraud flags enforcement:
-        # Biometric mismatch or confirmed tampering must never pass as LOW risk
-        if has_face and not is_match:
+        # Biometric mismatch, confirmed tampering, or document type mismatch must never pass as LOW risk
+        if tampering_result.get("flagged") and has_face and not is_match:
+            # Compound fraud: both photo tampering and biometric impostor detected
+            final_score = max(final_score, 65.0)
+        elif has_face and not is_match:
             final_score = max(final_score, 45.0)
         elif tampering_result.get("flagged"):
             final_score = max(final_score, 50.0)
+        elif has_passport_verification and doc_tone == "fail":
+            final_score = max(final_score, 45.0)
 
         final_score = max(0.0, min(100.0, final_score))
 
@@ -136,6 +182,8 @@ class RiskService:
             {"text": face_reason, "tone": face_tone, "module": "face"},
             {"text": comp_reason, "tone": comp_tone, "module": "ocr"}
         ]
+        if has_passport_verification:
+            reasons.append({"text": doc_reason, "tone": doc_tone, "module": "passport_verification"})
 
         factors = [
             {"factor": "Document validation", "contribution": round(val_risk * w_val, 1), "explanation": val_reason},
@@ -143,6 +191,8 @@ class RiskService:
             {"factor": "Face verification", "contribution": round(face_risk * w_face, 1), "explanation": face_reason},
             {"factor": "Completeness & OCR", "contribution": round(comp_risk * w_comp, 1), "explanation": comp_reason}
         ]
+        if has_passport_verification:
+            factors.append({"factor": "Passport classification", "contribution": round(doc_risk * w_doc, 1), "explanation": doc_reason})
 
         return {
             "score": final_score,

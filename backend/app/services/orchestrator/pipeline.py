@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 
 from app.storage.files import file_storage
 from app.services.ocr.engine import ocr_service
+from app.services.passport_verification_service import passport_verification_service
 from app.services.validation.service import validation_service
 from app.services.tampering.service import tampering_service
 from app.services.face.service import face_service
@@ -59,6 +60,28 @@ class ScreeningPipeline:
         canonical_img = ocr_result.get("canonical_image")
         proc_doc = canonical_img if canonical_img is not None else doc_path
 
+        # Stage 1.5: Document-Level Passport Classification (ML Model)
+        logger.info("[%s] Running PassportVerificationModel...", doc_id)
+        passport_verification_res = passport_verification_service.classify_document(proc_doc)
+        if passport_verification_res.get("is_passport"):
+            orchestration_logs.append({
+                "stage": "passport_verification",
+                "action": "DOCUMENT_TYPE_CONFIRMED",
+                "reason": f"PassportVerificationModel confirmed passport structure ({passport_verification_res.get('confidence', 0.0) * 100:.0f}% confidence)."
+            })
+        elif passport_verification_res.get("status") == "UNCERTAIN":
+            orchestration_logs.append({
+                "stage": "passport_verification",
+                "action": "DOCUMENT_TYPE_UNCERTAIN",
+                "reason": "Passport classification inconclusive. Manual officer inspection required."
+            })
+        else:
+            orchestration_logs.append({
+                "stage": "passport_verification",
+                "action": "DOCUMENT_TYPE_MISMATCH",
+                "reason": f"Input document classified as {passport_verification_res.get('status')} ({passport_verification_res.get('confidence', 0.0) * 100:.0f}% passport confidence)."
+            })
+
         # 3. Stage 2: Document Field Validation
         logger.info("[%s] Running document validation...", doc_id)
         validation_result = validation_service.validate(
@@ -84,6 +107,8 @@ class ScreeningPipeline:
         # 6. Stage 5: RAG Grounded Explanations
         logger.info("[%s] Retrieving grounded RAG explanations...", doc_id)
         flagged_issues = list(validation_result.get("failed_checks", []))
+        if passport_verification_res.get("is_passport") is False and document_type.lower() == "passport":
+            flagged_issues.append("Document visual layout mismatch: expected passport format.")
         if tampering_result.get("flagged"):
             flagged_issues.append("High tampering risk (probability of digital editing).")
         if face_result.get("status") == "completed" and face_result.get("match") is False:
@@ -97,7 +122,9 @@ class ScreeningPipeline:
             ocr_result=ocr_result,
             validation_result=validation_result,
             tampering_result=tampering_result,
-            face_result=face_result
+            face_result=face_result,
+            passport_verification=passport_verification_res,
+            document_type=document_type
         )
 
         # 8. Compile Unified Frontend-Compatible Screening Report
@@ -167,6 +194,15 @@ class ScreeningPipeline:
             "ocr_confidence": ocr_result["ocr_confidence"],
             "ocr": frontend_ocr,
             "mrz": ocr_result.get("mrz_data"),
+            "passport_verification": {
+                "is_passport": passport_verification_res["is_passport"],
+                "confidence": passport_verification_res["confidence"],
+                "confidence_pct": int(round(passport_verification_res["confidence"] * 100)),
+                "status": passport_verification_res["status"],
+                "model": passport_verification_res.get("model", "passport_verifier"),
+                "model_version": passport_verification_res.get("model_version", "1.0.0"),
+                "features": passport_verification_res.get("features", 33)
+            },
             "validation": frontend_validation,
             "tampering": {
                 "level": tampering_result["level"],
@@ -199,6 +235,13 @@ class ScreeningPipeline:
                     "passport_number": ocr_result.get("mrz_data", {}).get("passport_number_valid", False) if ocr_result.get("mrz_data") else False,
                     "date_of_birth": ocr_result.get("mrz_data", {}).get("date_of_birth_valid", False) if ocr_result.get("mrz_data") else False,
                     "expiry_date": ocr_result.get("mrz_data", {}).get("expiry_date_valid", False) if ocr_result.get("mrz_data") else False,
+                },
+                "passport_verification": {
+                    "is_passport": passport_verification_res["is_passport"],
+                    "confidence": passport_verification_res["confidence"],
+                    "status": passport_verification_res["status"],
+                    "features": passport_verification_res.get("features", 33),
+                    "model": passport_verification_res.get("model", "passport_verifier")
                 },
                 "face_model": face_result.get("model", "FaceNet"),
                 "tampering_inliers": tampering_result.get("copy_move", {}).get("verified_inliers", 0)

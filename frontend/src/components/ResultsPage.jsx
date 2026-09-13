@@ -68,6 +68,56 @@ function ResultsPage({ results, docPreview, facePreview, onStartNew }) {
         </div>
       )}
 
+      {/* Passport Document-Type Verification Section */}
+      {results.passport_verification && (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <h3 className="card__title" style={{ margin: 0 }}>
+              📘 Passport Document Classification
+            </h3>
+            <span
+              className={`status-pill ${
+                results.passport_verification.is_passport
+                  ? 'status-pill--pass'
+                  : results.passport_verification.status === 'UNCERTAIN'
+                  ? 'status-pill--warning'
+                  : 'status-pill--fail'
+              }`}
+            >
+              {results.passport_verification.is_passport
+                ? 'Passport Detected'
+                : results.passport_verification.status === 'UNCERTAIN'
+                ? 'Classification Inconclusive'
+                : 'Non-Passport Document'}
+            </span>
+          </div>
+          <p className="text-muted card__subtitle" style={{ margin: '4px 0 1rem 0' }}>
+            Document-type verification powered by PassportVerificationModel (Random Forest, 33 visual &amp; structural features).
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color, #334155)' }}>
+            <div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Document Type:</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 600, marginTop: '2px' }}>
+                {results.passport_verification.is_passport ? 'Passport' : 'Non-Passport Document'}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Confidence:</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 600, marginTop: '2px' }}>
+                Passport classification confidence: {results.passport_verification.confidence_pct ?? Math.round((results.passport_verification.confidence || 0) * 100)}%
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Status:</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 600, marginTop: '2px' }}>
+                {results.passport_verification.is_passport ? 'Passport Detected' : 'Classification Mismatch'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <OcrResults ocr={results.ocr} />
 
       <ValidationChecklist validation={results.validation} />
@@ -137,6 +187,19 @@ function ResultsPage({ results, docPreview, facePreview, onStartNew }) {
                   <div>RANSAC Verified Inliers: <strong>{results.tampering?.verified_inliers ?? 0} (Threshold: 25)</strong></div>
                   <div>Geometric Copy-Move Detected: <strong>{results.tampering?.verified_inliers >= 25 ? '⚠️ FORGERY DETECTED' : '✅ CLEAN'}</strong></div>
                   <div>Error Level Analysis (ELA): <strong>Raw {results.tampering?.ela_score ?? '0.31'}</strong></div>
+                </div>
+              </div>
+
+              {/* Passport Document Classification Model Diagnostics */}
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color, #334155)' }}>
+                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem' }}>🤖 Passport Verification Model (MIDV-2020)</h4>
+                <div style={{ fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div>Model Architecture: <strong>RandomForest (50 estimators)</strong></div>
+                  <div>Feature Vector: <strong>{results.passport_verification?.features || 33}-dimensional visual/structural</strong></div>
+                  <div>Document Classification: <strong>{results.passport_verification?.is_passport ? '✅ Passport Detected' : '❌ Non-Passport Document'}</strong></div>
+                  <div>Classification Confidence: <strong>{results.passport_verification?.confidence_pct ?? Math.round((results.passport_verification?.confidence || 0) * 100)}%</strong></div>
+                  <div>Status: <strong>{results.passport_verification?.status || 'N/A'}</strong></div>
+                  <div>Input Source: <strong>Orientation-corrected canonical frame</strong></div>
                 </div>
               </div>
             </div>
