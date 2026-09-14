@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 function OfficerDecision({ documentId, initialDecision, onDecisionRecorded }) {
   const [comment, setComment] = useState(initialDecision?.comment || '');

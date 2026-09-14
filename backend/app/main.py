@@ -3,8 +3,11 @@ Authenova Main FastAPI Application
 AI-powered identity and document verification platform.
 """
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv()
 
 from app.database.session import init_db
 from app.api.routes import health, upload, extraction, validation, tampering, face, risk, report, screening
@@ -24,7 +27,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Middleware to allow React development server
+# CORS Middleware to allow React development server (any localhost/127.0.0.1 port)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -35,6 +38,7 @@ app.add_middleware(
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
