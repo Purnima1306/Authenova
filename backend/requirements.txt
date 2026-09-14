@@ -16,16 +16,20 @@ pytesseract>=0.3.10
 pillow>=10.0.0
 numpy>=1.26.0
 
-# --- Testing ---
+# --- Testing & HTTP Clients ---
 pytest>=8.0.0
+anyio>=4.0.0
 httpx>=0.27.0
 
 # --- Persistence ---
 sqlalchemy>=2.0.0
 aiosqlite>=0.20.0
 
-# --- Face Verification & ML ---
+# --- Machine Learning, Biometrics & Forensics ---
 scipy>=1.11.0
+scikit-learn>=1.3.0
 keras-facenet>=0.3.2
 tensorflow>=2.15.0
 
+# --- Optional Semantic Embeddings for RAG ---
+# sentence-transformers>=2.2.0
