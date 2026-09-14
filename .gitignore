@@ -14,6 +14,7 @@ env/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # =========================
 # FastAPI / Python
@@ -46,9 +47,18 @@ build/
 Thumbs.db
 
 # =========================
+# Uploads & Database
+# =========================
+uploads/
+backend/uploads/
+*.db
+*.sqlite3
+data/
+backend/data/
+
+# =========================
 # Logs
 # =========================
 
 *.log
 npm-debug.log*
-.env

@@ -6,7 +6,7 @@ import PipelineProgress from './components/PipelineProgress';
 import ResultsPage from './components/ResultsPage';
 import './App.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 function App() {
   // 'login' | 'upload' | 'pipeline' | 'results'
@@ -65,7 +65,10 @@ function App() {
       setPage('results');
     } catch (err) {
       console.error('Screening failed:', err);
-      setScreeningError(err.message || 'Failed to connect to Authenova verification server.');
+      const msg = err.message === 'Failed to fetch'
+        ? 'Cannot connect to backend server. Please make sure the FastAPI backend is running on http://127.0.0.1:8000.'
+        : (err.message || 'Failed to connect to Authenova verification server.');
+      setScreeningError(msg);
     }
   }
 

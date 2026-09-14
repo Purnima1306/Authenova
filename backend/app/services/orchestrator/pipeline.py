@@ -104,8 +104,8 @@ class ScreeningPipeline:
         if face_result.get("adaptive_actions"):
             orchestration_logs.extend(face_result["adaptive_actions"])
 
-        # 6. Stage 5: RAG Grounded Explanations
-        logger.info("[%s] Retrieving grounded RAG explanations...", doc_id)
+        # 6. Stage 5: RAG Grounded Explanations with LLM Prompt Engineering
+        logger.info("[%s] Retrieving grounded RAG explanations with prompt engineering...", doc_id)
         flagged_issues = list(validation_result.get("failed_checks", []))
         if passport_verification_res.get("is_passport") is False and document_type.lower() == "passport":
             flagged_issues.append("Document visual layout mismatch: expected passport format.")
@@ -114,7 +114,16 @@ class ScreeningPipeline:
         if face_result.get("status") == "completed" and face_result.get("match") is False:
             flagged_issues.append("Low face similarity score between document and selfie.")
 
-        rag_explanations = rag_service.explain_all_flags(flagged_issues)
+        doc_context = {
+            "document_id": doc_id,
+            "document_type": document_type,
+            "ocr_confidence": int(ocr_result.get("ocr_confidence", 0.0) * 100),
+            "tampering_flagged": tampering_result.get("flagged", False),
+            "tampering_score": tampering_result.get("tampering_score", 0.0),
+            "face_match": face_result.get("match"),
+            "face_status": face_result.get("status", "skipped"),
+        }
+        rag_explanations = await rag_service.explain_all_flags_async(flagged_issues, context=doc_context)
 
         # 7. Stage 6: Weighted Risk Scoring
         logger.info("[%s] Calculating composite risk...", doc_id)

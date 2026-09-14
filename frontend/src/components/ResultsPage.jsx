@@ -32,16 +32,70 @@ function ResultsPage({ results, docPreview, facePreview, onStartNew }) {
 
       {results.rag_explanations && results.rag_explanations.length > 0 && (
         <div className="card">
-          <h3 className="card__title">Standard Criteria &amp; Policy Citations (RAG)</h3>
-          <p className="text-muted card__subtitle">
-            Grounded regulatory guidance retrieved for issues flagged during analysis.
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <h3 className="card__title" style={{ margin: 0 }}>Standard Criteria &amp; Policy Citations (RAG + AI)</h3>
+            <span className="status-pill status-pill--pass" style={{ fontSize: '0.75rem', padding: '3px 8px' }}>
+              ✦ Prompt-Engineered Synthesis
+            </span>
+          </div>
+          <p className="text-muted card__subtitle" style={{ marginTop: '0.25rem' }}>
+            Grounded regulatory guidance and actionable officer recommendations synthesized for flagged anomalies.
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem' }}>
             {results.rag_explanations.map((exp, idx) => (
-              <div key={idx} className="alert alert--warning" style={{ margin: 0 }}>
-                <strong>{exp.rule_id}</strong>: {exp.explanation}
-                <div style={{ fontSize: '0.8rem', marginTop: '0.25rem', opacity: 0.8 }}>
-                  Source: {exp.source} (Confidence: {Math.round((exp.relevance_score || 0) * 100)}%)
+              <div
+                key={idx}
+                style={{
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md, 8px)',
+                  padding: '1rem',
+                  background: 'var(--color-surface-card, #ffffff)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                }}
+              >
+                {/* Header Row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span className="status-pill status-pill--warning" style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 7px' }}>
+                      {exp.rule_id}
+                    </span>
+                    <strong style={{ fontSize: '0.9rem', color: 'var(--color-text-primary)' }}>
+                      {exp.topic ? exp.topic.replace(/_/g, ' ').toUpperCase() : 'COMPLIANCE'}
+                    </strong>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                    {exp.model && (
+                      <span style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(99, 102, 241, 0.1)', color: '#4f46e5', fontWeight: 600 }}>
+                        {exp.model}
+                      </span>
+                    )}
+                    <span style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(0,0,0,0.05)', color: 'var(--color-text-secondary)' }}>
+                      Match: {Math.round((exp.relevance_score || 0) * 100)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Finding Summary */}
+                <div style={{ fontSize: '0.92rem', marginBottom: '0.6rem', color: 'var(--color-text-primary)', lineHeight: 1.45 }}>
+                  <strong>Finding:</strong> {exp.summary || exp.explanation}
+                </div>
+
+                {/* Structured Breakdown: Risk Analysis & Officer Recommendation */}
+                {exp.risk_analysis && (
+                  <div style={{ background: '#fffbeb', borderLeft: '3px solid #f59e0b', padding: '0.5rem 0.75rem', borderRadius: '4px', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#92400e', lineHeight: 1.4 }}>
+                    <strong>Risk Analysis:</strong> {exp.risk_analysis}
+                  </div>
+                )}
+
+                {exp.officer_recommendation && (
+                  <div style={{ background: '#eff6ff', borderLeft: '3px solid #3b82f6', padding: '0.5rem 0.75rem', borderRadius: '4px', marginBottom: '0.5rem', fontSize: '0.85rem', color: '#1e40af', lineHeight: 1.4 }}>
+                    <strong>Officer Recommendation:</strong> {exp.officer_recommendation}
+                  </div>
+                )}
+
+                {/* Authority Source */}
+                <div style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)', opacity: 0.85, marginTop: '0.35rem' }}>
+                  Source Standard: {exp.source}
                 </div>
               </div>
             ))}
