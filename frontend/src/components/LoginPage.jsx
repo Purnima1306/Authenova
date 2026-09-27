@@ -1,12 +1,6 @@
 import { useState } from 'react';
 import { mockLogin } from '../data/mockData';
 
-// ==========================================================================
-// LOGIN PAGE
-// Basic username/password form. Uses mockLogin() from mockData.js instead
-// of a real backend. Wrong credentials show an inline error message.
-// ==========================================================================
-
 function LoginPage({ onLoginSuccess }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -34,22 +28,36 @@ function LoginPage({ onLoginSuccess }) {
     <div className="login-page">
       <div className="login-card">
         <div className="login-card__header">
-          <div className="navbar__logo-mark navbar__logo-mark--lg">A</div>
-          <h1>Verification Desk Login</h1>
+          <div className="navbar__logo-mark navbar__logo-mark--lg">
+            A
+          </div>
+
+          <div className="login-brand-label">
+            AUTHENOVA
+          </div>
+
+          <h1>Verification Desk</h1>
+
           <p className="text-muted">
-            Secure access for authorized verification officers only.
+            Secure access for authorized identity verification officers.
           </p>
+        </div>
+
+        <div className="login-security-note">
+          <span className="login-security-note__dot" />
+          Secure officer access
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           <label className="form-label" htmlFor="username">
             Username
           </label>
+
           <input
             id="username"
             type="text"
             className="form-input"
-            placeholder="e.g. officer1"
+            placeholder="Enter your username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
@@ -58,6 +66,7 @@ function LoginPage({ onLoginSuccess }) {
           <label className="form-label" htmlFor="password">
             Password
           </label>
+
           <input
             id="password"
             type="password"
@@ -68,17 +77,29 @@ function LoginPage({ onLoginSuccess }) {
             autoComplete="current-password"
           />
 
-          {error && <div className="alert alert--error">{error}</div>}
+          {error && (
+            <div className="alert alert--error">
+              {error}
+            </div>
+          )}
 
-          <button type="submit" className="btn btn--primary btn--full">
+          <button
+            type="submit"
+            className="btn btn--primary btn--full"
+          >
             Log In
           </button>
         </form>
 
-        <p className="login-hint">
-          Demo credentials — username: <code>officer1</code>, password:{' '}
-          <code>authenova123</code>
-        </p>
+        <div className="login-hint">
+          <span>Demo access</span>
+
+          <div className="login-hint__credentials">
+            <code>officer1</code>
+            <span>·</span>
+            <code>authenova123</code>
+          </div>
+        </div>
       </div>
     </div>
   );

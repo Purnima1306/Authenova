@@ -1,14 +1,8 @@
-// ==========================================================================
-// OCR RESULTS
-// Displays extracted document fields, each with a confidence percentage.
-// Any confidence below 70% is visually flagged as a warning.
-// ==========================================================================
-
 const CONFIDENCE_THRESHOLD = 70;
 
 const FIELD_LABELS = {
-  name: 'Name',
-  idNumber: 'ID Number',
+  name: 'Full Name',
+  idNumber: 'Document Number',
   dateOfBirth: 'Date of Birth',
   nationality: 'Nationality',
   expiryDate: 'Expiry Date',
@@ -16,59 +10,88 @@ const FIELD_LABELS = {
 
 function OcrResults({ ocr }) {
   return (
-    <div className="card">
-      <h3 className="card__title">OCR Extraction Results</h3>
-      <p className="text-muted card__subtitle">
-        Fields automatically extracted from the uploaded document.
-      </p>
+    <div className="card ocr-card">
+      <div className="ocr-card__header">
+        <div>
+          <span className="ocr-card__eyebrow">
+            DOCUMENT EXTRACTION
+          </span>
 
-      <div className="ocr-grid">
-        {Object.entries(ocr).map(([key, field]) => {
-          const isLowConfidence = field.confidence < CONFIDENCE_THRESHOLD;
+          <h3 className="card__title">
+            Extracted Information
+          </h3>
+
+          <p className="text-muted ocr-card__subtitle">
+            Information extracted from the submitted document using OCR.
+          </p>
+        </div>
+
+        <div className="ocr-source-badge">
+          {ocr.source}
+        </div>
+      </div>
+
+      <div className="ocr-fields">
+        {Object.entries(FIELD_LABELS).map(([key, label]) => {
+          const field = ocr.fields?.[key];
+
+          if (!field) return null;
+
+          const confidence = field.confidence ?? 0;
+          const isLowConfidence = confidence < CONFIDENCE_THRESHOLD;
+
           return (
             <div
               key={key}
-              className={`ocr-field ${isLowConfidence ? 'ocr-field--warning' : ''}`}
+              className={`ocr-field ${
+                isLowConfidence ? 'ocr-field--warning' : ''
+              }`}
             >
-              <div className="ocr-field__label">
-                <span>{FIELD_LABELS[key] || key}</span>
-                {field.source && (
-                  <span className="status-pill" style={{ fontSize: '0.7rem', padding: '1px 6px', marginLeft: '6px' }}>
-                    {field.source}
-                  </span>
-                )}
-              </div>
-              <div className="ocr-field__value">{field.value}</div>
-
-              <div className="ocr-field__confidence-row">
-                <div className="confidence-bar">
-                  <div
-                    className={`confidence-bar__fill ${
-                      isLowConfidence ? 'confidence-bar__fill--warning' : ''
-                    }`}
-                    style={{ width: `${field.confidence}%` }}
-                  />
-                </div>
-                <span
-                  className={`confidence-value ${
-                    isLowConfidence ? 'confidence-value--warning' : ''
-                  }`}
-                >
-                  {field.confidence}%
+              <div className="ocr-field__top">
+                <span className="ocr-field__label">
+                  {label}
                 </span>
-              </div>
 
-              {isLowConfidence && (
-                <div className="ocr-field__warning-text">
-                  Low confidence — recommend manual verification
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+                <span
+                  className={`ocr-confidence ${
+                    isLowConfidence
+      ? 'ocr-confidence--warning'
+      : 'ocr-confidence--pass'
+  }`}
+>
+  {confidence}% confidence
+</span>
+</div>
+
+<div className="ocr-field__value">
+  {field.value || 'Not detected'}
+</div>
+
+<div className="ocr-confidence-bar">
+  <div
+    className={`ocr-confidence-bar__fill ${
+      isLowConfidence
+        ? 'ocr-confidence-bar__fill--warning'
+        : 'ocr-confidence-bar__fill--pass'
+    }`}
+    style={{
+      width: `${Math.min(Math.max(confidence, 0), 100)}%`,
+    }}
+  />
+</div>
+
+{isLowConfidence && (
+  <div className="ocr-field__warning">
+    <span>!</span>
+    Low confidence extraction — manual verification recommended.
+  </div>
+)}
+</div>
+);
+})}
+</div>
+</div>
+);
 }
 
 export default OcrResults;

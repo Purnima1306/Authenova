@@ -16,10 +16,16 @@ function Navbar({ isLoggedIn, onLogout }) {
         <div className="navbar__right">
           <div className="navbar__officer">
             <span className="navbar__officer-dot" />
-            Officer1 &middot; Verification Desk
+            <span>
+              Officer1 <span aria-hidden="true">·</span> Verification Desk
+            </span>
           </div>
 
-          <button className="btn btn--ghost-dark" onClick={onLogout}>
+          <button
+            type="button"
+            className="btn btn--ghost-dark"
+            onClick={onLogout}
+          >
             Log Out
           </button>
         </div>
